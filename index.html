@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompt 填空生成器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --accent: #2563eb;
+      --accent-light: #dbeafe;
+      --accent-soft: rgba(37, 99, 235, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+
+    /* 场景卡片 */
+    .scene-tab {
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 1.5px solid #e2e8f0;
+      background: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      text-align: center;
+      transition: all .15s;
+      user-select: none;
+    }
+    .scene-tab:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .scene-tab.active {
+      border-color: var(--accent);
+      background: var(--accent-light);
+      color: #1e40af;
+      font-weight: 600;
+    }
+
+    /* 表单字段 */
+    .field-group {
+      background: #fff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+      transition: border-color .15s;
+    }
+    .field-group:focus-within { border-color: var(--accent); }
+
+    .field-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+
+    .field-hint {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 8px;
+      line-height: 1.6;
+    }
+
+    .field-hint code {
+      background: #f1f5f9;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #475569;
+    }
+
+    textarea.field-input {
+      width: 100%;
+      min-height: 64px;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      resize: vertical;
+      font-family: inherit;
+      line-height: 1.6;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    textarea.field-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+
+    input.field-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    input.field-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+
+    /* 可选折叠区 */
+    .optional-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #64748b;
+      cursor: pointer;
+      margin-top: 8px;
+      padding: 4px 0;
+      user-select: none;
+    }
+    .optional-toggle:hover { color: var(--accent); }
+
+    /* 预览区 */
+    .preview-panel {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      font-family: ui-monospace, SFMono-Regular, "Cascadia Code", "Fira Code", Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 300px;
+      max-height: 70vh;
+      overflow: auto;
+    }
+
+    .preview-panel .section-title {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+    .preview-panel .placeholder {
+      color: #64748b;
+      font-style: italic;
+    }
+
+    /* 按钮 */
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-ghost { background: transparent; color: #64748b; border: 1px solid #e2e8f0; }
+    .btn-ghost:hover { background: #f1f5f9; }
+
+    /* 步骤条 */
+    .step-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .step-num {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    /* 空状态提示 */
+    .empty-hint {
+      text-align: center;
+      padding: 40px 20px;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+
+    /* 滚动条 */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* 复制成功提示 */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity .3s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- 顶部 -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg">P</div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">Prompt 填空生成器</h1>
+          <p class="text-xs text-slate-500">不用想怎么组织语言，跟着提示填空就行</p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost" onclick="fillExample()">填入示例</button>
+        <button class="btn btn-ghost" onclick="clearAll()">清空</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-5 py-6">
+
+    <!-- 步骤1：选场景 -->
+    <div class="step-bar">
+      <div class="step-num">1</div>
+      <div class="step-title">选择你要做什么</div>
+    </div>
+    <div id="sceneTabs" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 mb-6"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <!-- 左侧：表单 -->
+      <div class="lg:col-span-3">
+        <div class="step-bar">
+          <div class="step-num">2</div>
+          <div class="step-title">按提示填空</div>
+          <span class="text-xs text-slate-400 ml-auto">填完一个空，右边就会实时更新</span>
+        </div>
+
+        <!-- 场景说明卡片 -->
+        <div id="sceneDesc" class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4 text-sm text-blue-900 leading-relaxed"></div>
+
+        <!-- 表单区域 -->
+        <div id="formArea"></div>
+      </div>
+
+      <!-- 右侧：预览 -->
+      <div class="lg:col-span-2">
+        <div class="step-bar">
+          <div class="step-num">3</div>
+          <div class="step-title">生成的 Prompt</div>
+          <div class="ml-auto flex gap-2">
+            <button class="btn btn-primary" onclick="copyResult()">复制</button>
+          </div>
+        </div>
+        <div id="preview" class="preview-panel"></div>
+        <p class="text-xs text-slate-400 mt-2">直接复制粘贴给 ChatGPT / Claude / DeepSeek / Kimi 等大模型即可使用</p>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast" class="toast">已复制到剪贴板</div>
+
+<script>
+// ============================================================
+// 场景配置 —— 每个场景是一组填空字段
+// ============================================================
+const SCENES = {
+  general: {
+    name: '通用提问',
+    icon: '💬',
+    desc: '日常向 AI 提问、寻求建议或解释概念。适合不确定该选哪个场景时使用。',
+    fields: [
+      {
+        id: 'role',
+        label: '你希望 AI 扮演什么角色？',
+        hint: '给 AI 一个身份，它的回答会更专业、更有针对性。例如：<code>资深前端工程师</code>、<code>营养师</code>、<code>高中数学老师</code>',
+        placeholder: '例如：一个有5年经验的产品经理',
+        required: true,
+        render: v => `请你扮演一位${v}。`
+      },
+      {
+        id: 'background',
+        label: '背景信息是什么？',
+        hint: '把 AI 当成一个完全不了解你情况的人，告诉它必要的上下文。不需要追求完美，把关键信息说出来就行。',
+        placeholder: '例如：我正在做一个面向大学生的二手交易平台，目前遇到了用户留存率低的问题',
+        required: true,
+        render: v => `\n背景：${v}`
+      },
+      {
+        id: 'task',
+        label: '你希望 AI 帮你做什么？',
+        hint: '用动词开头说清楚任务，比如<code>帮我分析</code>、<code>给我列出</code>、<code>用通俗易懂的方式解释</code>',
+        placeholder: '例如：帮我分析可能导致留存率低的原因，并给出3个具体的改进建议',
+        required: true,
+        render: v => `\n任务：${v}`
+      },
+      {
+        id: 'requirements',
+        label: '对回答有什么要求？（可选）',
+        hint: '比如字数、格式、风格、深度等。不知道怎么写就先跳过，后面可以再补充。',
+        placeholder: '例如：每个建议都要包含具体的执行步骤，用 bullet point 列出',
+        required: false,
+        render: v => `\n要求：${v}`
+      }
+    ]
+  },
+
+  coding: {
+    name: '代码开发',
+    icon: '💻',
+    desc: '写代码、改 Bug、优化代码、解释算法、设计架构等编程相关任务。',
+    fields: [
+      {
+        id: 'tech',
+        label: '使用的技术栈是什么？',
+        hint: '说清楚编程语言、框架、库版本等。版本号很重要，不同版本的 API 可能完全不同。',
+        placeholder: '例如：React 18 + TypeScript + Tailwind CSS',
+        required: true,
+        render: v => `技术栈：${v}`
+      },
+      {
+        id: 'context',
+        label: '项目背景或约束条件',
+        hint: '有没有特殊要求？比如性能限制、兼容要求、不能用的库、公司规范等。',
+        placeholder: '例如：需要兼容 IE11，不能使用第三方日期库',
+        required: false,
+        render: v => v ? `\n约束：${v}` : ''
+      },
+      {
+        id: 'feature',
+        label: '要实现什么功能？',
+        hint: '描述用户场景 + 期望行为。如果你能用"当...时，应该..."的句式，AI 更容易理解。',
+        placeholder: '例如：当用户点击"加载更多"按钮时，异步加载下一页数据并追加到列表末尾，同时显示加载动画',
+        required: true,
+        render: v => `\n需求：${v}`
+      },
+      {
+        id: 'code',
+        label: '现有代码（可选）',
+        hint: '如果有现有代码需要修改或基于它扩展，直接贴上来。不需要解释，AI 看得懂代码。',
+        placeholder: '粘贴你的代码...',
+        required: false,
+        render: v => v ? `\n现有代码：\n\`\`\`\n${v}\n\`\`\`` : ''
+      },
+      {
+        id: 'output',
+        label: '希望输出什么？',
+        hint: '完整代码？伪代码？思路分析？逐步讲解？说清楚，避免 AI 给一大堆你不想要的东西。',
+        placeholder: '例如：给出完整的可运行代码，并在关键行添加注释说明',
+        required: false,
+        render: v => v ? `\n输出要求：${v}` : ''
+      }
+    ]
+  },
+
+  writing: {
+    name: '内容创作',
+    icon: '✍️',
+    desc: '写文章、写邮件、写文案、写报告、写故事等文字创作任务。',
+    fields: [
+      {
+        id: 'type',
+        label: '要写什么类型的内容？',
+        hint: '越具体越好。<code>一篇文章</code>太模糊，<code>一篇面向职场新人的小红书风格的运营干货文</code>就清楚多了。',
+        placeholder: '例如：一封委婉拒绝加班要求的邮件',
+        required: true,
+        render: v => `请你帮我写：${v}`
+      },
+      {
+        id: 'audience',
+        label: '目标读者是谁？',
+        hint: 'AI 需要知道给谁看，才能调整语气、用词和深度。',
+        placeholder: '例如：我的直属领导，平时沟通比较直接，但我不想撕破脸',
+        required: false,
+        render: v => v ? `\n目标读者：${v}` : ''
+      },
+      {
+        id: 'content',
+        label: '核心内容或要点',
+        hint: '把你想表达的关键信息列出来，不用组织成完整句子， bullet point 也可以。',
+        placeholder: '例如：\n1. 最近连续加班导致身体疲惫\n2. 希望能按正常工作时间执行\n3. 承诺提高效率保证产出',
+        required: true,
+        render: v => `\n核心要点：\n${v}`
+      },
+      {
+        id: 'tone',
+        label: '语气风格',
+        hint: '正式？轻松？幽默？犀利？温暖？你可以直接说"像朋友聊天那样"或"像公司公告那样"。',
+        placeholder: '例如：委婉但坚定，不卑不亢',
+        required: false,
+        render: v => v ? `\n语气风格：${v}` : ''
+      },
+      {
+        id: 'format',
+        label: '格式要求（可选）',
+        hint: '字数、分段方式、是否需要标题、是否需要总结等。',
+        placeholder: '例如：300字以内，分三段',
+        required: false,
+        render: v => v ? `\n格式要求：${v}` : ''
+      }
+    ]
+  },
+
+  analysis: {
+    name: '数据分析',
+    icon: '📊',
+    desc: '分析数据、做图表、解读报表、统计计算、数据清洗等。',
+    fields: [
+      {
+        id: 'data',
+        label: '数据内容',
+        hint: '直接粘贴数据，或者描述数据结构。如果是表格，用 Markdown 表格或 CSV 格式都可以。',
+        placeholder: '例如：\n月份,销售额,用户数\n1月,12000,340\n2月,15000,410\n3月,11000,380',
+        required: true,
+        render: v => `数据如下：\n\`\`\`\n${v}\n\`\`\``
+      },
+      {
+        id: 'goal',
+        label: '分析目标',
+        hint: '你想从数据中发现什么？趋势？异常？关联？预测？',
+        placeholder: '例如：找出销售额下降的原因，并预测下个月的走势',
+        required: true,
+        render: v => `\n分析目标：${v}`
+      },
+      {
+        id: 'method',
+        label: '分析方法偏好（可选）',
+        hint: '有特定方法要求就说，没有就跳过让 AI 自己选。',
+        placeholder: '例如：用环比和同比结合分析',
+        required: false,
+        render: v => v ? `\n分析方法：${v}` : ''
+      },
+      {
+        id: 'output',
+        label: '输出形式',
+        hint: '表格？图表描述？文字报告？需要数据可视化建议吗？',
+        placeholder: '例如：给出文字分析结论，并建议用哪种图表展示',
+        required: false,
+        render: v => v ? `\n输出形式：${v}` : ''
+      }
+    ]
+  },
+
+  study: {
+    name: '学习辅导',
+    icon: '📚',
+    desc: '学习新知识、理解难点、做题辅导、制定学习计划等。',
+    fields: [
+      {
+        id: 'subject',
+        label: '学习科目或主题',
+        hint: '具体到知识点，不要只说<code>数学</code>，要说<code>高中导数的几何意义</code>。',
+        placeholder: '例如：Python 中的装饰器（decorator）',
+        required: true,
+        render: v => `我想学习：${v}`
+      },
+      {
+        id: 'level',
+        label: '你当前的水平？',
+        hint: '零基础？有基础但卡在某个点？复习巩固？这决定了 AI 讲解的起点和深度。',
+        placeholder: '例如：会基础语法，但对函数作为参数传递的理解不太清楚',
+        required: true,
+        render: v => `\n当前水平：${v}`
+      },
+      {
+        id: 'goal',
+        label: '学习目标',
+        hint: '考试？面试？做项目？兴趣了解？不同的目标侧重点完全不同。',
+        placeholder: '例如：能独立写出常用的装饰器，理解其应用场景',
+        required: false,
+        render: v => v ? `\n学习目标：${v}` : ''
+      },
+      {
+        id: 'style',
+        label: '喜欢的讲解方式',
+        hint: '喜欢类比？喜欢一步一步推导？喜欢先看例子再讲原理？',
+        placeholder: '例如：先用生活化的比喻帮我理解概念，再给代码示例',
+        required: false,
+        render: v => v ? `\n讲解偏好：${v}` : ''
+      }
+    ]
+  },
+
+  work: {
+    name: '职场办公',
+    icon: '💼',
+    desc: '写周报、做 PPT 大纲、写会议纪要、梳理工作流程、准备面试等。',
+    fields: [
+      {
+        id: 'type',
+        label: '要处理什么工作事项？',
+        hint: '写周报？做汇报？整理会议记录？越具体 AI 越能帮你。',
+        placeholder: '例如：整理今天下午产品评审会议的纪要',
+        required: true,
+        render: v => `请你帮我：${v}`
+      },
+      {
+        id: 'material',
+        label: '素材或原始内容',
+        hint: '把零散的内容直接贴上来，不用整理格式。AI 会帮你提炼和结构化。',
+        placeholder: '例如：\n- 讨论了登录页改版方案\n- 小李提出要做 A/B 测试\n- 决定下周三上线\n- 遗留问题：兼容旧版本的数据迁移',
+        required: true,
+        render: v => `\n原始内容：\n${v}`
+      },
+      {
+        id: 'format',
+        label: '输出格式',
+        hint: '公司有没有固定模板？或者你希望什么样的结构？',
+        placeholder: '例如：按"已完成 / 进行中 / 阻塞项 / 下周计划"四栏输出',
+        required: false,
+        render: v => v ? `\n格式要求：${v}` : ''
+      },
+      {
+        id: 'audience',
+        label: '汇报对象（可选）',
+        hint: '给平级同事看的和给老板看的，措辞和侧重点完全不同。',
+        placeholder: '例如：直属领导，他比较关注进度和风险',
+        required: false,
+        render: v => v ? `\n汇报对象：${v}` : ''
+      }
+    ]
+  },
+
+  skill: {
+    name: '生成 Skill',
+    icon: '🔧',
+    desc: '为 Claude Code 或其他 AI 工具生成 Skill 配置文件，把重复性任务封装成可复用的指令模板。',
+    fields: [
+      {
+        id: 'name',
+        label: 'Skill 名称',
+        hint: '用一个简短、好记的名字，最好是一个动词或动词短语，让人一看就知道这个 skill 是做什么的。',
+        placeholder: '例如：代码审查 / 生成 API 文档 / 写测试用例',
+        required: true,
+        render: v => `Skill 名称：${v}`
+      },
+      {
+        id: 'trigger',
+        label: '什么时候触发这个 Skill？',
+        hint: '说清楚什么场景下应该调用这个 skill。可以用"当用户...时"的句式。这是 Skill 最核心的识别条件。',
+        placeholder: '例如：当用户要求审查代码时，或者当用户说"帮我看看这段代码有没有问题"时',
+        required: true,
+        render: v => `\n触发时机：${v}`
+      },
+      {
+        id: 'purpose',
+        label: '这个 Skill 的功能是什么？',
+        hint: '用 1-2 句话概括这个 skill 能做什么。不要写得太长，要让别人能快速判断是否该用这个 skill。',
+        placeholder: '例如：审查代码中的潜在 Bug、性能问题和安全漏洞，并给出修改建议',
+        required: true,
+        render: v => `\n功能描述：${v}`
+      },
+      {
+        id: 'input',
+        label: '需要什么输入信息？',
+        hint: '这个 skill 执行时需要用户提供什么？代码片段？文件路径？数据表格？描述清楚输入格式。',
+        placeholder: '例如：\n1. 要审查的代码片段\n2. 使用的编程语言和框架\n3. 项目的编码规范（可选）',
+        required: true,
+        render: v => `\n输入要求：\n${v}`
+      },
+      {
+        id: 'steps',
+        label: '执行步骤（可选）',
+        hint: '如果希望 AI 按固定流程执行，把步骤列出来。不需要完美，想到几个写几个，AI 会帮你完善。',
+        placeholder: '例如：\n1. 先检查语法错误\n2. 再检查逻辑漏洞\n3. 最后检查性能问题\n4. 按优先级列出发现的问题',
+        required: false,
+        render: v => v ? `\n执行步骤：\n${v}` : ''
+      },
+      {
+        id: 'output',
+        label: '输出格式',
+        hint: '希望 skill 输出什么格式的结果？结构化报告？代码片段？表格？bullet point？',
+        placeholder: '例如：用 Markdown 格式输出，包含问题描述、严重程度（高/中/低）、具体位置和修改建议四列',
+        required: false,
+        render: v => v ? `\n输出格式：${v}` : ''
+      },
+      {
+        id: 'example',
+        label: '给一个示例（可选）',
+        hint: '举一个具体的输入和输出示例，帮助 AI 更准确地理解你的需求。这是让 skill 效果变好的关键。',
+        placeholder: '例如：\n输入：一段有内存泄漏风险的 JavaScript 代码\n输出：指出哪里用了闭包但没有清理，给出修复后的代码',
+        required: false,
+        render: v => v ? `\n示例：\n${v}` : ''
+      }
+    ]
+  }
+};
+
+// ============================================================
+// 状态
+// ============================================================
+let currentScene = 'general';
+let values = {};
+
+// ============================================================
+// 初始化
+// ============================================================
+function init() {
+  renderSceneTabs();
+  switchScene('general');
+}
+
+function renderSceneTabs() {
+  const container = document.getElementById('sceneTabs');
+  container.innerHTML = Object.entries(SCENES).map(([key, scene]) =>
+    `<div class="scene-tab ${key === currentScene ? 'active' : ''}" data-key="${key}" onclick="switchScene('${key}')">
+      <div class="text-xl mb-1">${scene.icon}</div>
+      <div>${scene.name}</div>
+    </div>`
+  ).join('');
+}
+
+function switchScene(key) {
+  currentScene = key;
+  values = {};
+  renderSceneTabs();
+  renderForm();
+  updatePreview();
+}
+
+// ============================================================
+// 渲染表单
+// ============================================================
+function renderForm() {
+  const scene = SCENES[currentScene];
+  document.getElementById('sceneDesc').textContent = scene.desc;
+
+  const container = document.getElementById('formArea');
+  container.innerHTML = scene.fields.map(f => `
+    <div class="field-group">
+      <div class="field-label">${f.required ? '' : '<span class="text-slate-400 font-normal">[可选]</span> '}${f.label}</div>
+      <div class="field-hint">${f.hint}</div>
+      ${f.id === 'code' || f.id === 'data' || f.id === 'material' || f.id === 'content' || f.id === 'steps' || f.id === 'input' || f.id === 'example'
+        ? `<textarea class="field-input" id="field-${f.id}" placeholder="${f.placeholder.replace(/"/g, '&quot;')}" rows="4" oninput="onInput('${f.id}', this.value)">${values[f.id] || ''}</textarea>`
+        : `<input class="field-input" id="field-${f.id}" placeholder="${f.placeholder.replace(/"/g, '&quot;')}" value="${(values[f.id] || '').replace(/"/g, '&quot;')}" oninput="onInput('${f.id}', this.value)">`
+      }
+    </div>
+  `).join('');
+}
+
+function onInput(id, value) {
+  values[id] = value;
+  updatePreview();
+}
+
+// ============================================================
+// 生成预览
+// ============================================================
+function updatePreview() {
+  const scene = SCENES[currentScene];
+  const parts = [];
+
+  for (const field of scene.fields) {
+    const v = values[field.id]?.trim();
+    if (v) {
+      parts.push(field.render(v));
+    } else if (field.required) {
+      parts.push(`<span class="placeholder">【待填写：${field.label.replace(/<[^>]*>/g, '')}】</span>`);
+    }
+  }
+
+  const html = parts.join('\n') || '<span class="placeholder">在左侧表单中填空，这里会实时显示生成的 Prompt...</span>';
+  document.getElementById('preview').innerHTML = html;
+}
+
+// ============================================================
+// 复制结果
+// ============================================================
+function copyResult() {
+  const scene = SCENES[currentScene];
+  const parts = [];
+  for (const field of scene.fields) {
+    const v = values[field.id]?.trim();
+    if (v) parts.push(field.render(v));
+  }
+  const text = parts.join('\n');
+
+  navigator.clipboard.writeText(text).then(() => {
+    const toast = document.getElementById('toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  });
+}
+
+// ============================================================
+// 填入示例
+// ============================================================
+function fillExample() {
+  const examples = {
+    general: {
+      role: '一个有5年经验的产品经理',
+      background: '我正在做一个面向大学生的二手交易平台，目前遇到了用户留存率低的问题',
+      task: '帮我分析可能导致留存率低的原因，并给出3个具体的改进建议',
+      requirements: '每个建议都要包含具体的执行步骤，用 bullet point 列出'
+    },
+    coding: {
+      tech: 'React 18 + TypeScript + Tailwind CSS',
+      context: '需要兼容 IE11，不能使用第三方日期库',
+      feature: '当用户点击"加载更多"按钮时，异步加载下一页数据并追加到列表末尾，同时显示加载动画',
+      code: '',
+      output: '给出完整的可运行代码，并在关键行添加注释说明'
+    },
+    writing: {
+      type: '一封委婉拒绝加班要求的邮件',
+      audience: '我的直属领导，平时沟通比较直接，但我不想撕破脸',
+      content: '1. 最近连续加班导致身体疲惫\n2. 希望能按正常工作时间执行\n3. 承诺提高效率保证产出',
+      tone: '委婉但坚定，不卑不亢',
+      format: '300字以内，分三段'
+    },
+    analysis: {
+      data: '月份,销售额,用户数\n1月,12000,340\n2月,15000,410\n3月,11000,380',
+      goal: '找出销售额下降的原因，并预测下个月的走势',
+      method: '用环比和同比结合分析',
+      output: '给出文字分析结论，并建议用哪种图表展示'
+    },
+    study: {
+      subject: 'Python 中的装饰器（decorator）',
+      level: '会基础语法，但对函数作为参数传递的理解不太清楚',
+      goal: '能独立写出常用的装饰器，理解其应用场景',
+      style: '先用生活化的比喻帮我理解概念，再给代码示例'
+    },
+    work: {
+      type: '整理今天下午产品评审会议的纪要',
+      material: '- 讨论了登录页改版方案\n- 小李提出要做 A/B 测试\n- 决定下周三上线\n- 遗留问题：兼容旧版本的数据迁移',
+      format: '按"已完成 / 进行中 / 阻塞项 / 下周计划"四栏输出',
+      audience: '直属领导，他比较关注进度和风险'
+    },
+    skill: {
+      name: '代码审查助手',
+      trigger: '当用户要求审查代码、检查 Bug 或说"帮我看看这段代码"时',
+      purpose: '自动检查代码中的语法错误、逻辑漏洞、性能问题和安全隐患，按优先级给出修改建议',
+      input: '1. 要审查的代码片段\n2. 使用的编程语言和框架\n3. 项目的编码规范（如有）',
+      steps: '1. 检查语法和编译错误\n2. 分析逻辑漏洞和边界情况\n3. 检查性能瓶颈\n4. 扫描安全隐患\n5. 按严重程度排序输出',
+      output: '用表格输出：问题类型 | 严重程度 | 位置 | 问题描述 | 修改建议',
+      example: '输入：一个未处理 Promise 拒绝的异步函数\n输出：指出缺少 try/catch 或 .catch()，给出修复后的代码示例'
+    }
+  };
+
+  values = { ...(examples[currentScene] || {}) };
+  renderForm();
+  updatePreview();
+}
+
+// ============================================================
+// 清空
+// ============================================================
+function clearAll() {
+  values = {};
+  renderForm();
+  updatePreview();
+}
+
+// 启动
+init();
+</script>
+</body>
+</html>
